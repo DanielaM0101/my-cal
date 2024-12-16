@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, SafeAreaView } from 'react-native';
 import Screen from './Screen';
 import ButtonGrid from './ButtonGrid';
 import ConversionModal from './conversionModal';
 
 export default function Calculator() {
   const [display, setDisplay] = useState('0');
-  const [firstOperand, setFirstOperand] = useState<number | null>(null);
-  const [operator, setOperator] = useState<string | null>(null);
+  const [firstOperand, setFirstOperand] = useState<null | number>(null); 
+  const [operator, setOperator] = useState('');
   const [waitingForSecondOperand, setWaitingForSecondOperand] = useState(false);
   const [expression, setExpression] = useState('');
   const [showConversionModal, setShowConversionModal] = useState(false);
@@ -15,25 +15,31 @@ export default function Calculator() {
   const inputDigit = (digit: string) => {
     if (waitingForSecondOperand) {
       setDisplay(String(digit));
-      setExpression(expression + String(digit));
+      setExpression(prev => prev + String(digit));
       setWaitingForSecondOperand(false);
     } else {
       setDisplay(display === '0' ? String(digit) : display + digit);
-      setExpression(expression + String(digit));
+      setExpression(prev => {
+        
+        if (['+', '-', '*', '/'].some(op => prev.endsWith(op))) {
+          return prev + ' ' + digit;
+        }
+        return prev === '0' ? String(digit) : prev + digit;
+      });
     }
   };
 
   const inputDecimal = () => {
     if (waitingForSecondOperand) {
       setDisplay('0.');
-      setExpression(expression + '0.');
+      setExpression(prev => prev + '0.');
       setWaitingForSecondOperand(false);
       return;
     }
 
     if (!display.includes('.')) {
       setDisplay(display + '.');
-      setExpression(expression + '.');
+      setExpression(prev => prev + '.');
     }
   };
 
@@ -41,12 +47,23 @@ export default function Calculator() {
     setDisplay('0');
     setExpression('');
     setFirstOperand(null);
-    setOperator(null);
+    setOperator('');
     setWaitingForSecondOperand(false);
   };
 
   const performOperation = (nextOperator: string) => {
     const inputValue = parseFloat(display);
+
+    if (operator && waitingForSecondOperand) {
+      
+      setOperator(nextOperator);
+      setExpression(prev => {
+        
+        const newExpression = prev.trim().slice(0, -1) + nextOperator;
+        return newExpression;
+      });
+      return;
+    }
 
     if (firstOperand === null) {
       setFirstOperand(inputValue);
@@ -60,11 +77,18 @@ export default function Calculator() {
     setWaitingForSecondOperand(true);
     setOperator(nextOperator);
     if (nextOperator !== '=') {
-      setExpression(expression + ` ${nextOperator} `);
+      setExpression(prev => {
+        
+        if (['+', '-', '*', '/'].some(op => prev.endsWith(op))) {
+          return prev.slice(0, -1) + nextOperator;
+        }
+        
+        return `${prev} ${nextOperator}`;
+      });
     }
   };
 
-  const calculate = (firstOperand: number, secondOperand: number, operator: string) => {
+  const calculate = (firstOperand: number, secondOperand: number, operator: string): number => {
     switch (operator) {
       case '+':
         return firstOperand + secondOperand;
@@ -80,7 +104,7 @@ export default function Calculator() {
   };
 
   const convertUnits = (conversionType: string, value: number) => {
-    const numValue = value;
+      const numValue = value;
     let result;
     let fromUnit, toUnit;
 
@@ -113,32 +137,55 @@ export default function Calculator() {
     setExpression(`${numValue} ${fromUnit} = ${result.toFixed(2)} ${toUnit}`);
   };
 
+  const handlePercent = () => {
+    const value = parseFloat(display);
+    if (operator && firstOperand !== null) {
+      
+      const percentValue = (firstOperand * value) / 100;
+      setDisplay(String(percentValue));
+      setExpression(prev => `${prev}${value}% = ${percentValue}`);
+    } else {
+      
+      const result = value / 100;
+      setDisplay(String(result));
+      setExpression(`${value}% = ${result}`);
+    }
+    setWaitingForSecondOperand(true);
+  };
+
   return (
-    <View style={styles.container}>
-      <Screen value={display} expression={expression} />
-      <ButtonGrid
-        onDigitPress={inputDigit}
-        onDecimalPress={inputDecimal}
-        onClearPress={clear}
-        onOperatorPress={performOperation}
-        onEqualsPress={() => performOperation('=')}
-        onConvertPress={() => setShowConversionModal(true)}
-      />
-      <ConversionModal
-        visible={showConversionModal}
-        onClose={() => setShowConversionModal(false)}
-        onConvert={convertUnits}
-        value={parseFloat(display)}
-      />
-    </View>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Screen value={display} expression={expression} />
+        <ButtonGrid
+          onDigitPress={inputDigit}
+          onDecimalPress={inputDecimal}
+          onClearPress={clear}
+          onOperatorPress={performOperation}
+          onEqualsPress={() => performOperation('=')}
+          onConvertPress={() => setShowConversionModal(true)}
+          onPercentPress={handlePercent}
+        />
+        <ConversionModal
+          visible={showConversionModal}
+          onClose={() => setShowConversionModal(false)}
+          onConvert={convertUnits}
+          value={parseFloat(display)}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#f0f0f0',
-    padding: 20,
+  },
+  container: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'flex-end',
   },
 });
 
